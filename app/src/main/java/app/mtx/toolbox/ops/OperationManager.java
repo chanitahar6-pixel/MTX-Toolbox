@@ -16,14 +16,19 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Runs every heavy task in MTX. Multiple operations may run concurrently, but
- * the pool is bounded so low-RAM devices are not thrashed. Nothing ever runs on
- * the UI thread.
+ * Runs every heavy task in MTX. Multiple operations may run concurrently, but the
+ * pool is bounded so low-RAM devices are not thrashed. Nothing ever runs on the
+ * UI thread, and completion callbacks are always delivered on the main thread.
  */
 public final class OperationManager {
 
     public interface Listener {
         void onOperationsChanged();
+    }
+
+    /** Delivered on the main thread once an operation reaches a terminal state. */
+    public interface Completion {
+        void onFinished(Operation op);
     }
 
     private static OperationManager instance;
@@ -56,6 +61,10 @@ public final class OperationManager {
     }
 
     public Operation submit(String kind, String title, Operation.Body body) {
+        return submit(kind, title, body, null);
+    }
+
+    public Operation submit(String kind, String title, Operation.Body body, final Completion completion) {
         final Operation op = new Operation(ids.getAndIncrement(), kind, title, body);
         operations.add(0, op);
         notifyChanged();
@@ -66,6 +75,18 @@ public final class OperationManager {
                 op.runInternal();
                 writeLog(op);
                 notifyChanged();
+                if (completion != null) {
+                    main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                completion.onFinished(op);
+                            } catch (Throwable t) {
+                                MtxLog.e(appContext, "op", "completion callback failed", t);
+                            }
+                        }
+                    });
+                }
             }
         });
         return op;
@@ -123,10 +144,7 @@ public final class OperationManager {
         if (op.error() != null) sb.append(" | ").append(op.error());
         for (String line : op.log()) sb.append("\n    ").append(line);
 
-        if (op.state() == Operation.State.FAILED) {
-            MtxLog.e(appContext, "op", sb.toString(), null);
-        } else {
-            MtxLog.i(appContext, "op", sb.toString());
-        }
+        if (op.state() == Operation.State.FAILED) MtxLog.e(appContext, "op", sb.toString(), null);
+        else MtxLog.i(appContext, "op", sb.toString());
     }
 }
