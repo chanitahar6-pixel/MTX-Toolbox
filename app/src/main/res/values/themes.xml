@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DayNight parent: the app follows the phone by default and the user can
+         force light or dark from Settings (see ThemeManager). -->
+    <style name="Theme.Mtx" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/mtx_primary</item>
+        <item name="colorPrimaryDark">@color/mtx_primary_dark</item>
+        <item name="colorSecondary">@color/mtx_accent</item>
+        <item name="colorAccent">@color/mtx_accent</item>
+        <item name="android:colorBackground">@color/surface</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:statusBarColor">@color/surface_alt</item>
+        <item name="android:windowBackground">@color/surface</item>
+    </style>
+
+    <style name="Mtx.Title">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">middle</item>
+    </style>
+
+    <style name="Mtx.Body">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+
+    <style name="Mtx.Meta">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:singleLine">true</item>
+        <item name="android:ellipsize">middle</item>
+    </style>
+
+    <style name="Mtx.Mono">
+        <item name="android:typeface">monospace</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/text_primary</item>
+    </style>
+</resources>

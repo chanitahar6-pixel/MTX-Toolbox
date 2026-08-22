@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mtx_primary">#2E6BE6</color>
+    <color name="mtx_primary_dark">#1B47A8</color>
+    <color name="mtx_accent">#00A98F</color>
+
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_alt">#F3F5F9</color>
+    <color name="divider">#DDE1E8</color>
+    <color name="text_primary">#12161C</color>
+    <color name="text_secondary">#5B6472</color>
+    <color name="selection">#1F2E6BE6</color>
+
+    <color name="kind_folder">#F2A93B</color>
+    <color name="kind_apk">#3DDC84</color>
+    <color name="kind_archive">#B07CE8</color>
+    <color name="kind_text">#4C8DFF</color>
+    <color name="kind_binary">#8A93A3</color>
+    <color name="kind_image">#E86A8C</color>
+
+    <color name="state_ok">#1E9E5A</color>
+    <color name="state_fail">#D93A3A</color>
+    <color name="state_run">#2E6BE6</color>
+    <color name="ic_launcher_background">#12161C</color>
+</resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="mtx_primary">#6E9BFF</color>
+    <color name="mtx_primary_dark">#3F6FD8</color>
+    <color name="mtx_accent">#38D6BC</color>
+
+    <color name="surface">#0F1216</color>
+    <color name="surface_alt">#171C22</color>
+    <color name="divider">#2A313A</color>
+    <color name="text_primary">#EDF0F4</color>
+    <color name="text_secondary">#9AA4B2</color>
+    <color name="selection">#336E9BFF</color>
+
+    <color name="state_ok">#4CD787</color>
+    <color name="state_fail">#FF6B6B</color>
+    <color name="state_run">#6E9BFF</color>
+</resources>
