@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:name=".MtxApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:largeHeap="true"
+        android:requestLegacyExternalStorage="true"
+        android:supportsRtl="true"
+        android:extractNativeLibs="false"
+        android:theme="@style/Theme.Mtx">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|locale|layoutDirection"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".ui.OperationsActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.SettingsActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.ApkInfoActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.ArchiveActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.HexActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.TextEditorActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.SearchActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.StorageAnalyzerActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.InstalledAppsActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.HashActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.ElfActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.CompareActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.DeviceInfoActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+        <activity android:name=".ui.PropertiesActivity" android:configChanges="orientation|screenSize|uiMode|locale" />
+
+        <service
+            android:name=".ops.OperationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

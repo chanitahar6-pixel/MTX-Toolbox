@@ -1,0 +1,17 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        flatDir { dirs 'tools' } // Apktool / smali / JADX jars land here in Phase 2-3
+    }
+}
+rootProject.name = 'MTX Toolbox'
+include ':app'

@@ -1,0 +1,11 @@
+MTX Toolbox
+Copyright 2026 MTX Toolbox contributors
+
+This product includes software developed as part of the MTX Toolbox project.
+Licensed under the Apache License, Version 2.0.
+
+Third-party components, references and their licenses are tracked in
+docs/THIRD-PARTY.md. Any component that is bundled or distributed with this
+application keeps its own LICENSE/NOTICE/COPYRIGHT files under third_party/.
+
+No Kotlin source code is part of this project.
