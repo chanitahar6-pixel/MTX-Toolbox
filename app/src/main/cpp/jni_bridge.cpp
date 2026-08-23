@@ -78,6 +78,25 @@ jobjectArray toJArray(JNIEnv* env, const std::vector<std::string>& rows) {
     return arr;
 }
 
+// ---- key=value payload builders -------------------------------------------
+// Deliberately three differently named functions instead of overloads: an int
+// argument would otherwise match both the integer and the bool overload, which
+// is an ambiguous call and fails to compile.
+void kvText(std::string& out, const char* key, const std::string& value) {
+    out += key;
+    out += '=';
+    out += value;
+    out += '\n';
+}
+
+void kvNum(std::string& out, const char* key, long long value) {
+    kvText(out, key, std::to_string(value));
+}
+
+void kvBool(std::string& out, const char* key, bool value) {
+    kvText(out, key, std::string(value ? "true" : "false"));
+}
+
 // ---- callback adapters ----------------------------------------------------
 class JProgress : public Progress {
 public:
@@ -86,8 +105,11 @@ public:
         jclass c = env_->GetObjectClass(sink_);
         mid_ = env_->GetMethodID(c, "onProgress", "(Ljava/lang/String;JJJJJ)V");
         env_->DeleteLocalRef(c);
+        if (env_->ExceptionCheck()) env_->ExceptionClear();
     }
-    bool valid() const { return sink_ && mid_; }
+
+    bool valid() const { return sink_ != nullptr && mid_ != nullptr; }
+
     void report(const char* current, int64_t done, int64_t total,
                 int64_t speed, int64_t filesDone, int64_t filesTotal) override {
         if (!valid()) return;
@@ -97,6 +119,7 @@ public:
         if (js) env_->DeleteLocalRef(js);
         if (env_->ExceptionCheck()) env_->ExceptionClear();
     }
+
 private:
     JNIEnv* env_;
     jobject sink_;
@@ -110,9 +133,13 @@ public:
         jclass c = env_->GetObjectClass(sink_);
         mid_ = env_->GetMethodID(c, "onRow", "(Ljava/lang/String;Ljava/lang/String;JJ)V");
         env_->DeleteLocalRef(c);
+        if (env_->ExceptionCheck()) env_->ExceptionClear();
     }
+
+    bool valid() const { return sink_ != nullptr && mid_ != nullptr; }
+
     void row(const char* a, const char* b, int64_t n1, int64_t n2) override {
-        if (!sink_ || !mid_) return;
+        if (!valid()) return;
         jstring ja = toJ(env_, a ? a : "");
         jstring jb = toJ(env_, b ? b : "");
         env_->CallVoidMethod(sink_, mid_, ja, jb, (jlong) n1, (jlong) n2);
@@ -120,23 +147,23 @@ public:
         if (jb) env_->DeleteLocalRef(jb);
         if (env_->ExceptionCheck()) env_->ExceptionClear();
     }
+
 private:
     JNIEnv* env_;
     jobject sink_;
     jmethodID mid_ = nullptr;
 };
 
-void kv(std::string& out, const char* key, const std::string& value) {
-    out += key;
-    out += '=';
-    out += value;
-    out += '\n';
-}
-void kv(std::string& out, const char* key, int64_t value) {
-    kv(out, key, std::to_string(value));
-}
-void kv(std::string& out, const char* key, bool value) {
-    kv(out, key, std::string(value ? "true" : "false"));
+std::string entryRow(const fsx::Entry& e) {
+    std::string r = e.name;
+    r += SEP; r += e.isDir ? '1' : '0';
+    r += SEP; r += std::to_string(e.size);
+    r += SEP; r += std::to_string(e.mtime);
+    r += SEP; r += std::to_string(e.mode);
+    r += SEP; r += e.isLink ? '1' : '0';
+    r += SEP; r += e.readable ? '1' : '0';
+    r += SEP; r += e.writable ? '1' : '0';
+    return r;
 }
 
 } // namespace
@@ -146,7 +173,7 @@ extern "C" {
 #define NM(name) Java_app_mtx_toolbox_core_Native_##name
 
 JNIEXPORT jstring JNICALL NM(coreVersion)(JNIEnv* env, jclass) {
-    return toJ(env, "mtx-core 0.1.0 (C++17, no Kotlin)");
+    return toJ(env, "mtx-core 0.1.0 (C++17, ndk-build, no Kotlin)");
 }
 
 JNIEXPORT jstring JNICALL NM(lastError)(JNIEnv* env, jclass) {
@@ -166,17 +193,7 @@ JNIEXPORT jobjectArray JNICALL NM(listDir)(JNIEnv* env, jclass, jstring jpath) {
 
     std::vector<std::string> rows;
     rows.reserve(entries.size());
-    for (const fsx::Entry& e : entries) {
-        std::string r = e.name;
-        r += SEP; r += e.isDir ? '1' : '0';
-        r += SEP; r += std::to_string(e.size);
-        r += SEP; r += std::to_string(e.mtime);
-        r += SEP; r += std::to_string(e.mode);
-        r += SEP; r += e.isLink ? '1' : '0';
-        r += SEP; r += e.readable ? '1' : '0';
-        r += SEP; r += e.writable ? '1' : '0';
-        rows.push_back(std::move(r));
-    }
+    for (size_t i = 0; i < entries.size(); i++) rows.push_back(entryRow(entries[i]));
     return toJArray(env, rows);
 }
 
@@ -185,15 +202,7 @@ JNIEXPORT jstring JNICALL NM(statPath)(JNIEnv* env, jclass, jstring jpath) {
     fsx::Entry e;
     Status s = fsx::statOne(fromJ(env, jpath), e);
     if (!s.ok()) { setError(s); return nullptr; }
-    std::string r = e.name;
-    r += SEP; r += e.isDir ? '1' : '0';
-    r += SEP; r += std::to_string(e.size);
-    r += SEP; r += std::to_string(e.mtime);
-    r += SEP; r += std::to_string(e.mode);
-    r += SEP; r += e.isLink ? '1' : '0';
-    r += SEP; r += e.readable ? '1' : '0';
-    r += SEP; r += e.writable ? '1' : '0';
-    return toJ(env, r);
+    return toJ(env, entryRow(e));
 }
 
 JNIEXPORT jint JNICALL NM(copyPath)(JNIEnv* env, jclass, jlong job, jstring src, jstring dstDir,
@@ -302,13 +311,13 @@ JNIEXPORT jstring JNICALL NM(analyzeType)(JNIEnv* env, jclass, jstring path) {
     Status s = ftype::analyze(fromJ(env, path), info);
     if (!s.ok()) { setError(s); return nullptr; }
     std::string out;
-    kv(out, "kind", info.kind);
-    kv(out, "mime", info.mime);
-    kv(out, "description", info.description);
-    kv(out, "magic", info.magicHex);
-    kv(out, "encoding", info.encoding);
-    kv(out, "size", info.size);
-    for (const std::string& t : info.tools) kv(out, "tool", t);
+    kvText(out, "kind", info.kind);
+    kvText(out, "mime", info.mime);
+    kvText(out, "description", info.description);
+    kvText(out, "magic", info.magicHex);
+    kvText(out, "encoding", info.encoding);
+    kvNum(out, "size", info.size);
+    for (size_t i = 0; i < info.tools.size(); i++) kvText(out, "tool", info.tools[i]);
     return toJ(env, out);
 }
 
@@ -331,7 +340,7 @@ JNIEXPORT jint JNICALL NM(hexWrite)(JNIEnv* env, jclass, jstring path, jlong off
     if (!data) return E_RANGE;
     jsize n = env->GetArrayLength(data);
     std::vector<uint8_t> buf((size_t) n);
-    env->GetByteArrayRegion(data, 0, n, (jbyte*) buf.data());
+    if (n > 0) env->GetByteArrayRegion(data, 0, n, (jbyte*) buf.data());
     Status s = hexx::writeAt(fromJ(env, path), (int64_t) offset, buf.data(), buf.size());
     if (!s.ok()) setError(s);
     return s.code;
@@ -342,6 +351,7 @@ JNIEXPORT jlong JNICALL NM(hexFind)(JNIEnv* env, jclass, jlong job, jstring path
     clearError();
     if (!pattern) { g_lastError = "empty pattern"; return -1; }
     jsize n = env->GetArrayLength(pattern);
+    if (n <= 0) { g_lastError = "empty pattern"; return -1; }
     std::vector<uint8_t> pat((size_t) n);
     env->GetByteArrayRegion(pattern, 0, n, (jbyte*) pat.data());
     int64_t match = -1;
@@ -356,7 +366,7 @@ JNIEXPORT jint JNICALL NM(extractStrings)(JNIEnv* env, jclass, jlong job, jstrin
     clearError();
     JRows rows(env, sink);
     Status s = hexx::extractStrings((int64_t) job, fromJ(env, path), (size_t) minLen,
-                                    (size_t) maxResults, &rows);
+                                    (size_t) maxResults, rows.valid() ? &rows : nullptr);
     if (!s.ok()) setError(s);
     return s.code;
 }
@@ -370,16 +380,17 @@ JNIEXPORT jobjectArray JNICALL NM(zipList)(JNIEnv* env, jclass, jstring path) {
 
     std::vector<std::string> rows;
     rows.reserve(entries.size());
-    for (const zipx::ZEntry& e : entries) {
+    for (size_t i = 0; i < entries.size(); i++) {
+        const zipx::ZEntry& e = entries[i];
         std::string r = e.name;
         r += SEP; r += e.isDir ? '1' : '0';
-        r += SEP; r += std::to_string(e.uncompressedSize);
-        r += SEP; r += std::to_string(e.compressedSize);
+        r += SEP; r += std::to_string((long long) e.uncompressedSize);
+        r += SEP; r += std::to_string((long long) e.compressedSize);
         r += SEP; r += std::to_string(e.mtime);
-        r += SEP; r += std::to_string(e.method);
+        r += SEP; r += std::to_string((int) e.method);
         r += SEP; r += e.encrypted ? '1' : '0';
-        r += SEP; r += std::to_string(e.crc32);
-        rows.push_back(std::move(r));
+        r += SEP; r += std::to_string((long long) e.crc32);
+        rows.push_back(r);
     }
     return toJArray(env, rows);
 }
@@ -396,6 +407,7 @@ JNIEXPORT jint JNICALL NM(zipExtract)(JNIEnv* env, jclass, jlong job, jstring zi
 
 JNIEXPORT jbyteArray JNICALL NM(zipRead)(JNIEnv* env, jclass, jstring zip, jstring entry, jint maxBytes) {
     clearError();
+    if (maxBytes <= 0) { g_lastError = "invalid size limit"; return nullptr; }
     std::vector<uint8_t> data;
     Status s = zipx::readEntry(fromJ(env, zip), fromJ(env, entry), data, (size_t) maxBytes);
     if (!s.ok()) { setError(s); return nullptr; }
@@ -414,8 +426,8 @@ JNIEXPORT jstring JNICALL NM(zipTest)(JNIEnv* env, jclass, jlong job, jstring zi
                                  p.valid() ? &p : nullptr);
     if (!s.ok()) { setError(s); return nullptr; }
     std::string out;
-    kv(out, "badEntries", bad);
-    kv(out, "firstBad", firstBad);
+    kvNum(out, "badEntries", bad);
+    kvText(out, "firstBad", firstBad);
     return toJ(env, out);
 }
 
@@ -426,53 +438,63 @@ JNIEXPORT jstring JNICALL NM(apkInfo)(JNIEnv* env, jclass, jstring path) {
     Status s = apkx::inspect(fromJ(env, path), in);
     // Partial results are still useful, so a failure returns what was parsed plus the error.
     std::string out;
-    kv(out, "ok", s.ok());
-    if (!s.ok()) { kv(out, "error", s.msg); setError(s); }
-    kv(out, "path", in.path);
-    kv(out, "fileSize", in.fileSize);
-    kv(out, "entryCount", in.entryCount);
-    kv(out, "package", in.packageName);
-    kv(out, "versionName", in.versionName);
-    kv(out, "versionCode", in.versionCode);
-    kv(out, "minSdk", in.minSdk);
-    kv(out, "targetSdk", in.targetSdk);
-    kv(out, "compileSdk", in.compileSdk);
-    kv(out, "label", in.appLabel);
-    kv(out, "icon", in.appIcon);
-    kv(out, "mainActivity", in.mainActivity);
-    kv(out, "split", in.splitName);
-    kv(out, "installLocation", in.installLocation);
-    kv(out, "debuggable", in.debuggable);
-    kv(out, "extractNativeLibs", in.extractNativeLibs);
-    kv(out, "cleartextTraffic", in.usesCleartextTraffic);
-    kv(out, "hasArsc", in.hasResourcesArsc);
-    kv(out, "hasAssets", in.hasAssets);
-    kv(out, "dexCount", (int64_t) in.dexFiles.size());
-    kv(out, "signingBlock", in.hasApkSigningBlock);
-    kv(out, "schemeV2", in.schemeV2);
-    kv(out, "schemeV3", in.schemeV3);
-    kv(out, "schemeV31", in.schemeV31);
-    kv(out, "schemeV1Files", in.hasV1Files);
-    for (const std::string& v : in.abis) kv(out, "abi", v);
-    for (const std::string& v : in.dexFiles) kv(out, "dex", v);
-    for (const std::string& v : in.nativeLibs) kv(out, "lib", v);
-    for (const std::string& v : in.permissions) kv(out, "permission", v);
-    for (const std::string& v : in.declaredPermissions) kv(out, "definesPermission", v);
-    for (const std::string& v : in.features) kv(out, "feature", v);
-    for (const std::string& v : in.libraries) kv(out, "usesLibrary", v);
-    for (const std::string& v : in.metaInfFiles) kv(out, "metaInf", v);
-    for (const apkx::Component& c : in.components) {
+    kvBool(out, "ok", s.ok());
+    if (!s.ok()) { kvText(out, "error", s.msg); setError(s); }
+    kvText(out, "path", in.path);
+    kvNum(out, "fileSize", in.fileSize);
+    kvNum(out, "entryCount", in.entryCount);
+    kvText(out, "package", in.packageName);
+    kvText(out, "versionName", in.versionName);
+    kvNum(out, "versionCode", in.versionCode);
+    kvNum(out, "minSdk", in.minSdk);
+    kvNum(out, "targetSdk", in.targetSdk);
+    kvNum(out, "compileSdk", in.compileSdk);
+    kvText(out, "label", in.appLabel);
+    kvText(out, "icon", in.appIcon);
+    kvText(out, "mainActivity", in.mainActivity);
+    kvText(out, "split", in.splitName);
+    kvText(out, "installLocation", in.installLocation);
+    kvBool(out, "debuggable", in.debuggable);
+    kvBool(out, "extractNativeLibs", in.extractNativeLibs);
+    kvBool(out, "cleartextTraffic", in.usesCleartextTraffic);
+    kvBool(out, "hasArsc", in.hasResourcesArsc);
+    kvBool(out, "hasAssets", in.hasAssets);
+    kvNum(out, "dexCount", (long long) in.dexFiles.size());
+    kvBool(out, "signingBlock", in.hasApkSigningBlock);
+    kvBool(out, "schemeV2", in.schemeV2);
+    kvBool(out, "schemeV3", in.schemeV3);
+    kvBool(out, "schemeV31", in.schemeV31);
+    kvBool(out, "schemeV1Files", in.hasV1Files);
+
+    for (size_t i = 0; i < in.abis.size(); i++) kvText(out, "abi", in.abis[i]);
+    for (size_t i = 0; i < in.dexFiles.size(); i++) kvText(out, "dex", in.dexFiles[i]);
+    for (size_t i = 0; i < in.nativeLibs.size(); i++) kvText(out, "lib", in.nativeLibs[i]);
+    for (size_t i = 0; i < in.permissions.size(); i++) kvText(out, "permission", in.permissions[i]);
+    for (size_t i = 0; i < in.declaredPermissions.size(); i++)
+        kvText(out, "definesPermission", in.declaredPermissions[i]);
+    for (size_t i = 0; i < in.features.size(); i++) kvText(out, "feature", in.features[i]);
+    for (size_t i = 0; i < in.libraries.size(); i++) kvText(out, "usesLibrary", in.libraries[i]);
+    for (size_t i = 0; i < in.metaInfFiles.size(); i++) kvText(out, "metaInf", in.metaInfFiles[i]);
+
+    for (size_t i = 0; i < in.components.size(); i++) {
+        const apkx::Component& c = in.components[i];
         std::string row = c.kind;
         row += SEP; row += c.name;
         row += SEP; row += c.exported ? "1" : "0";
         row += SEP; row += c.enabled ? "1" : "0";
         std::string filters;
-        for (const std::string& a : c.intentActions) filters += (filters.empty() ? "" : " | ") + a;
-        for (const std::string& a : c.intentCategories) filters += (filters.empty() ? "" : " | ") + a;
+        for (size_t k = 0; k < c.intentActions.size(); k++) {
+            if (!filters.empty()) filters += " | ";
+            filters += c.intentActions[k];
+        }
+        for (size_t k = 0; k < c.intentCategories.size(); k++) {
+            if (!filters.empty()) filters += " | ";
+            filters += c.intentCategories[k];
+        }
         row += SEP; row += filters;
-        kv(out, "component", row);
+        kvText(out, "component", row);
     }
-    for (const std::string& w : in.warnings) kv(out, "warning", w);
+    for (size_t i = 0; i < in.warnings.size(); i++) kvText(out, "warning", in.warnings[i]);
     return toJ(env, out);
 }
 
@@ -488,7 +510,7 @@ JNIEXPORT jstring JNICALL NM(axmlToXml)(JNIEnv* env, jclass, jstring path) {
     clearError();
     std::vector<uint8_t> data;
     int64_t fileSize = 0;
-    Status s = hexx::readPage(fromJ(env, path), 0, 32u * 1024u * 1024u, data, fileSize);
+    Status s = hexx::readPage(fromJ(env, path), 0, (size_t) (32u * 1024u * 1024u), data, fileSize);
     if (!s.ok()) { setError(s); return nullptr; }
     std::string xml;
     s = axml::toXml(data.data(), data.size(), xml);
@@ -502,19 +524,19 @@ JNIEXPORT jstring JNICALL NM(dexInfo)(JNIEnv* env, jclass, jstring path) {
     Status s = dexx::inspectFile(fromJ(env, path), in);
     if (!s.ok()) { setError(s); return nullptr; }
     std::string out;
-    kv(out, "version", in.version);
-    kv(out, "signature", in.signatureHex);
-    kv(out, "checksum", (int64_t) in.checksum);
-    kv(out, "headerFileSize", in.headerFileSize);
-    kv(out, "actualFileSize", in.actualFileSize);
-    kv(out, "strings", (int64_t) in.stringIds);
-    kv(out, "types", (int64_t) in.typeIds);
-    kv(out, "protos", (int64_t) in.protoIds);
-    kv(out, "fields", (int64_t) in.fieldIds);
-    kv(out, "methods", (int64_t) in.methodIds);
-    kv(out, "classes", (int64_t) in.classDefs);
-    kv(out, "valid", in.valid);
-    for (const std::string& w : in.warnings) kv(out, "warning", w);
+    kvText(out, "version", in.version);
+    kvText(out, "signature", in.signatureHex);
+    kvNum(out, "checksum", (long long) in.checksum);
+    kvNum(out, "headerFileSize", in.headerFileSize);
+    kvNum(out, "actualFileSize", in.actualFileSize);
+    kvNum(out, "strings", (long long) in.stringIds);
+    kvNum(out, "types", (long long) in.typeIds);
+    kvNum(out, "protos", (long long) in.protoIds);
+    kvNum(out, "fields", (long long) in.fieldIds);
+    kvNum(out, "methods", (long long) in.methodIds);
+    kvNum(out, "classes", (long long) in.classDefs);
+    kvBool(out, "valid", in.valid);
+    for (size_t i = 0; i < in.warnings.size(); i++) kvText(out, "warning", in.warnings[i]);
     return toJ(env, out);
 }
 
@@ -525,33 +547,37 @@ JNIEXPORT jstring JNICALL NM(elfInfo)(JNIEnv* env, jclass, jstring path, jint ma
     Status s = elfx::analyze(fromJ(env, path), in, (size_t) (maxSymbols > 0 ? maxSymbols : 2000));
     if (!s.ok()) { setError(s); return nullptr; }
     std::string out;
-    kv(out, "bits", in.is64 ? 64 : 32);
-    kv(out, "type", in.fileType);
-    kv(out, "machine", in.machine);
-    kv(out, "abi", in.abi);
-    kv(out, "entry", (int64_t) in.entry);
-    kv(out, "soname", in.soname);
-    kv(out, "interp", in.interp);
-    kv(out, "stripped", in.stripped);
-    for (const std::string& n : in.needed) kv(out, "needed", n);
-    for (const elfx::Section& sec : in.sections) {
+    kvNum(out, "bits", in.is64 ? 64 : 32);
+    kvText(out, "type", in.fileType);
+    kvText(out, "machine", in.machine);
+    kvText(out, "abi", in.abi);
+    kvNum(out, "entry", (long long) in.entry);
+    kvText(out, "soname", in.soname);
+    kvText(out, "interp", in.interp);
+    kvBool(out, "stripped", in.stripped);
+
+    for (size_t i = 0; i < in.needed.size(); i++) kvText(out, "needed", in.needed[i]);
+
+    for (size_t i = 0; i < in.sections.size(); i++) {
+        const elfx::Section& sec = in.sections[i];
         std::string row = sec.name;
         row += SEP; row += sec.type;
-        row += SEP; row += std::to_string(sec.addr);
-        row += SEP; row += std::to_string(sec.offset);
-        row += SEP; row += std::to_string(sec.size);
-        kv(out, "section", row);
+        row += SEP; row += std::to_string((long long) sec.addr);
+        row += SEP; row += std::to_string((long long) sec.offset);
+        row += SEP; row += std::to_string((long long) sec.size);
+        kvText(out, "section", row);
     }
-    for (const elfx::Symbol& sym : in.symbols) {
+    for (size_t i = 0; i < in.symbols.size(); i++) {
+        const elfx::Symbol& sym = in.symbols[i];
         std::string row = sym.name;
         row += SEP; row += sym.type;
         row += SEP; row += sym.bind;
-        row += SEP; row += std::to_string(sym.value);
-        row += SEP; row += std::to_string(sym.size);
+        row += SEP; row += std::to_string((long long) sym.value);
+        row += SEP; row += std::to_string((long long) sym.size);
         row += SEP; row += sym.undefined ? "import" : "export";
-        kv(out, "symbol", row);
+        kvText(out, "symbol", row);
     }
-    for (const std::string& w : in.warnings) kv(out, "warning", w);
+    for (size_t i = 0; i < in.warnings.size(); i++) kvText(out, "warning", in.warnings[i]);
     return toJ(env, out);
 }
 
@@ -566,7 +592,8 @@ JNIEXPORT jint JNICALL NM(search)(JNIEnv* env, jclass, jlong job, jstring root, 
     opt.flags = (int32_t) flags;
     opt.maxResults = (size_t) (maxResults > 0 ? maxResults : 5000);
     Status s = searchx::run((int64_t) job, fromJ(env, root), fromJ(env, namePattern),
-                            fromJ(env, content), opt, &rows, p.valid() ? &p : nullptr);
+                            fromJ(env, content), opt, rows.valid() ? &rows : nullptr,
+                            p.valid() ? &p : nullptr);
     if (!s.ok()) setError(s);
     return s.code;
 }
