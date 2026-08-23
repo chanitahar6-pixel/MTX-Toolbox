@@ -5,13 +5,13 @@ Legend: **[x] shipped & wired to real execution** · **[~] in progress** · **[ 
 Rule: a tool only appears in the UI once it really runs. No `TODO`, no `Coming Soon` buttons.
 
 ## Phase 1 — Core + File Manager + native engines
-- [x] Gradle + CMake + JNI skeleton, Java/C++ only
+- [x] Gradle + **ndk-build (Android.mk)** + JNI skeleton, Java and C++ only, no Kotlin
 - [x] `fs` engine: list, stat, chunked copy/move, recursive delete, mkdir, rename, disk usage
 - [x] Operations engine: queue, progress, speed, ETA, cancel, retry, background, logs
 - [x] Dual-pane file manager, independent paths, multi-select, sort, hidden files, bookmarks
 - [x] MTX workspace bootstrap (`Extracted/APK/Projects/Backups/Signed/Temp/Logs/Exports`)
 - [x] File type analyzer (magic bytes + MIME + tool suggestion)
-- [x] Hash tools (MD5/SHA-1/SHA-224/SHA-256/SHA-384/SHA-512), file + folder + compare
+- [x] Hash tools (MD5/SHA-1/SHA-224/SHA-256/SHA-384/SHA-512), file + compare
 - [x] Hex editor: paged view, byte/text search, in-place edit, go-to-offset
 - [x] Text editor: UTF-8/16, line numbers, search/replace, go-to-line, large-file guard
 - [x] Search engine: wildcards, content search, streaming, cancelable
@@ -53,3 +53,8 @@ Tested against: small file · huge file · corrupt file · Arabic filenames · v
 real APK · multi-DEX APK · split APK · large ZIP · UTF-8 text · binary blob.
 Plus: build, install, runtime, memory, cancellation, permission denial, low storage, rotation,
 background execution.
+
+## Build audit log
+
+A full three-pass audit of every file was run before Phase 2 started. Findings and
+fixes are recorded in [AUDIT.md](AUDIT.md).
