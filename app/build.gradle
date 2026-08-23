@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+// See gradle.properties. false keeps the build free of any NDK requirement,
+// which is what makes this project compile inside AndroidIDE on the phone.
+def useNative = Boolean.parseBoolean(
+        (project.findProperty('mtx.nativeBuild') ?: 'false').toString())
+
 android {
     namespace 'app.mtx.toolbox'
     compileSdk 34
@@ -13,24 +18,27 @@ android {
         versionCode 1
         versionName '0.1.0'
 
-        ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
-        }
+        vectorDrawables.useSupportLibrary = true
 
-        // Native engines are built with ndk-build (Android.mk), not CMake.
-        externalNativeBuild {
-            ndkBuild {
-                arguments 'APP_STL=c++_shared', 'NDK_TOOLCHAIN_VERSION=clang'
-                cppFlags '-std=c++17', '-fexceptions', '-frtti', '-O2'
+        if (useNative) {
+            ndk {
+                abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+            }
+            externalNativeBuild {
+                ndkBuild {
+                    arguments 'APP_STL=c++_shared', 'NDK_TOOLCHAIN_VERSION=clang'
+                    cppFlags '-std=c++17', '-fexceptions', '-frtti', '-O2'
+                }
             }
         }
-
-        vectorDrawables.useSupportLibrary = true
     }
 
-    externalNativeBuild {
-        ndkBuild {
-            path 'src/main/cpp/Android.mk'
+    if (useNative) {
+        // Native engines are built with ndk-build (Android.mk), never CMake.
+        externalNativeBuild {
+            ndkBuild {
+                path 'src/main/cpp/Android.mk'
+            }
         }
     }
 
@@ -40,15 +48,16 @@ android {
             minifyEnabled false
         }
         release {
-            minifyEnabled true
-            shrinkResources true
+            // R8 is left off by default so a release build also succeeds on-device.
+            minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
     packaging {
@@ -67,11 +76,10 @@ android {
 }
 
 dependencies {
-    // androidx.core is pinned explicitly because FileProvider is used directly.
-    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.core:core:1.10.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.material:material:1.9.0'
 }

@@ -1,14 +1,25 @@
 package app.mtx.toolbox.core;
 
 /**
- * The single JNI surface of MTX. Every method here maps 1:1 to a function in
- * {@code jni_bridge.cpp}. Nothing in this class does work in Java: it only
- * forwards to the C++ engines.
+ * The single engine entry point used by the whole app.
  *
- * <p>Return conventions:
+ * <p>Two interchangeable implementations sit behind this class:
+ * <ul>
+ *   <li>the <b>C++ core</b> ({@code libmtxcore.so}, built from {@code Android.mk})
+ *       whenever it is packaged in the APK;</li>
+ *   <li>the <b>pure-Java engines</b> ({@code JavaEngine}, {@code JavaZip},
+ *       {@code JavaApk}, {@code JavaAxml}, {@code JavaDex}, {@code JavaElf},
+ *       {@code JavaSearch}) otherwise.</li>
+ * </ul>
+ *
+ * <p>Both paths return exactly the same payload formats, so no caller ever needs
+ * to know which one ran. That is what allows the project to be built on a desktop
+ * with an NDK <i>and</i> on the phone in AndroidIDE without touching any code.
+ *
+ * <p>Conventions:
  * <ul>
  *   <li>{@code int} results are {@link OpResult} codes ({@code 0} == success);</li>
- *   <li>{@code null} means failure, and {@link #lastError()} holds the technical reason;</li>
+ *   <li>{@code null} means failure, and {@link #lastError()} holds the reason;</li>
  *   <li>long-running calls take a {@code job} id so they can be cancelled.</li>
  * </ul>
  */
@@ -16,30 +27,13 @@ public final class Native {
 
     private Native() {}
 
-    private static boolean loaded;
-    private static String loadError;
-
-    static {
-        try {
-            System.loadLibrary("mtxcore");
-            loaded = true;
-        } catch (Throwable t) {
-            loaded = false;
-            loadError = String.valueOf(t.getMessage());
-        }
-    }
-
-    public static boolean isAvailable() { return loaded; }
-
-    public static String loadError() { return loadError; }
-
-    // ---- hash algorithm ids shared with hash.h -----------------------------
+    // ---- hash algorithm ids, shared with hash.h -----------------------------
     public static final int MD5 = 0;
     public static final int SHA1 = 1;
     public static final int SHA224 = 2;
     public static final int SHA256 = 3;
 
-    // ---- search flags shared with search.h ---------------------------------
+    // ---- search flags, shared with search.h --------------------------------
     public static final int SEARCH_RECURSIVE = 1;
     public static final int SEARCH_CASE = 1 << 1;
     public static final int SEARCH_CONTENT = 1 << 2;
@@ -47,58 +41,182 @@ public final class Native {
     public static final int SEARCH_HIDDEN = 1 << 4;
     public static final int SEARCH_WHOLE_WORD = 1 << 5;
 
-    public static native String coreVersion();
+    private static final boolean NATIVE = NativeLib.isLoaded();
+
+    /** True whenever an engine is usable, which is always: Java is the fallback. */
+    public static boolean isAvailable() { return true; }
+
+    /** True only when the C++ core is the active engine. */
+    public static boolean isNativeCore() { return NATIVE; }
+
+    /** Why the native core is not in use, or null when it is. */
+    public static String loadError() { return NATIVE ? null : NativeLib.loadError(); }
+
+    public static String coreVersion() {
+        if (NATIVE) {
+            try {
+                return NativeLib.coreVersion();
+            } catch (Throwable ignored) {
+            }
+        }
+        return "mtx-core 0.1.0 (Java engines, no NDK in this build)";
+    }
 
     /** Technical detail of the most recent failure on this thread. */
-    public static native String lastError();
+    public static String lastError() {
+        if (NATIVE) {
+            try {
+                return NativeLib.lastError();
+            } catch (Throwable ignored) {
+            }
+        }
+        return JavaEngine.lastError();
+    }
 
-    public static native long newJob();
-    public static native void cancelJob(long job);
-    public static native void releaseJob(long job);
+    // ---- jobs --------------------------------------------------------------
+    public static long newJob() {
+        return NATIVE ? NativeLib.newJob() : JavaEngine.newJob();
+    }
+
+    public static void cancelJob(long job) {
+        if (NATIVE) NativeLib.cancelJob(job);
+        else JavaEngine.cancelJob(job);
+    }
+
+    public static void releaseJob(long job) {
+        if (NATIVE) NativeLib.releaseJob(job);
+        else JavaEngine.releaseJob(job);
+    }
 
     // ---- file system -------------------------------------------------------
-    public static native String[] listDir(String path);
-    public static native String statPath(String path);
-    public static native int copyPath(long job, String src, String dstDir, boolean overwrite, ProgressSink sink);
-    public static native int movePath(long job, String src, String dstDir, boolean overwrite, ProgressSink sink);
-    public static native int deletePath(long job, String path, ProgressSink sink);
-    public static native int mkdirs(String path);
-    public static native int createFile(String path);
-    public static native int renamePath(String from, String to);
+    public static String[] listDir(String path) {
+        return NATIVE ? NativeLib.listDir(path) : JavaEngine.listDir(path);
+    }
+
+    public static String statPath(String path) {
+        return NATIVE ? NativeLib.statPath(path) : JavaEngine.statPath(path);
+    }
+
+    public static int copyPath(long job, String src, String dstDir, boolean overwrite, ProgressSink sink) {
+        return NATIVE
+                ? NativeLib.copyPath(job, src, dstDir, overwrite, sink)
+                : JavaEngine.copyPath(job, src, dstDir, overwrite, sink);
+    }
+
+    public static int movePath(long job, String src, String dstDir, boolean overwrite, ProgressSink sink) {
+        return NATIVE
+                ? NativeLib.movePath(job, src, dstDir, overwrite, sink)
+                : JavaEngine.movePath(job, src, dstDir, overwrite, sink);
+    }
+
+    public static int deletePath(long job, String path, ProgressSink sink) {
+        return NATIVE ? NativeLib.deletePath(job, path, sink) : JavaEngine.deletePath(job, path, sink);
+    }
+
+    public static int mkdirs(String path) {
+        return NATIVE ? NativeLib.mkdirs(path) : JavaEngine.mkdirs(path);
+    }
+
+    public static int createFile(String path) {
+        return NATIVE ? NativeLib.createFile(path) : JavaEngine.createFile(path);
+    }
+
+    public static int renamePath(String from, String to) {
+        return NATIVE ? NativeLib.renamePath(from, to) : JavaEngine.renamePath(from, to);
+    }
+
     /** @return {total, free, available} in bytes, or null. */
-    public static native long[] diskUsage(String path);
+    public static long[] diskUsage(String path) {
+        return NATIVE ? NativeLib.diskUsage(path) : JavaEngine.diskUsage(path);
+    }
+
     /** @return {bytes, files, dirs}, or null. */
-    public static native long[] treeStats(long job, String path, ProgressSink sink);
+    public static long[] treeStats(long job, String path, ProgressSink sink) {
+        return NATIVE ? NativeLib.treeStats(job, path, sink) : JavaEngine.treeStats(job, path, sink);
+    }
+
     /** @return {firstDifferentByteOffset, identical ? 1 : 0}, or null. */
-    public static native long[] compareFiles(long job, String a, String b, ProgressSink sink);
+    public static long[] compareFiles(long job, String a, String b, ProgressSink sink) {
+        return NATIVE ? NativeLib.compareFiles(job, a, b, sink) : JavaEngine.compareFiles(job, a, b, sink);
+    }
 
     // ---- hash / type -------------------------------------------------------
-    public static native String hashFile(long job, String path, int algo, ProgressSink sink);
-    public static native String analyzeType(String path);
+    public static String hashFile(long job, String path, int algo, ProgressSink sink) {
+        return NATIVE ? NativeLib.hashFile(job, path, algo, sink) : JavaEngine.hashFile(job, path, algo, sink);
+    }
+
+    public static String analyzeType(String path) {
+        return NATIVE ? NativeLib.analyzeType(path) : JavaFileType.analyze(path);
+    }
 
     // ---- hex / binary ------------------------------------------------------
-    public static native byte[] hexRead(String path, long offset, int len);
-    public static native int hexWrite(String path, long offset, byte[] data);
-    public static native long hexFind(long job, String path, long from, byte[] pattern, boolean backwards);
-    public static native int extractStrings(long job, String path, int minLen, int maxResults, RowSink sink);
+    public static byte[] hexRead(String path, long offset, int len) {
+        return NATIVE ? NativeLib.hexRead(path, offset, len) : JavaEngine.hexRead(path, offset, len);
+    }
+
+    public static int hexWrite(String path, long offset, byte[] data) {
+        return NATIVE ? NativeLib.hexWrite(path, offset, data) : JavaEngine.hexWrite(path, offset, data);
+    }
+
+    public static long hexFind(long job, String path, long from, byte[] pattern, boolean backwards) {
+        return NATIVE
+                ? NativeLib.hexFind(job, path, from, pattern, backwards)
+                : JavaEngine.hexFind(job, path, from, pattern, backwards);
+    }
+
+    public static int extractStrings(long job, String path, int minLen, int maxResults, RowSink sink) {
+        return NATIVE
+                ? NativeLib.extractStrings(job, path, minLen, maxResults, sink)
+                : JavaEngine.extractStrings(job, path, minLen, maxResults, sink);
+    }
 
     // ---- archives ----------------------------------------------------------
-    public static native String[] zipList(String path);
+    public static String[] zipList(String path) {
+        return NATIVE ? NativeLib.zipList(path) : JavaZip.list(path);
+    }
+
     /** entry == null or "" extracts the whole archive. */
-    public static native int zipExtract(long job, String zip, String entry, String outDir, ProgressSink sink);
-    public static native byte[] zipRead(String zip, String entry, int maxBytes);
-    public static native String zipTest(long job, String zip, ProgressSink sink);
+    public static int zipExtract(long job, String zip, String entry, String outDir, ProgressSink sink) {
+        return NATIVE
+                ? NativeLib.zipExtract(job, zip, entry, outDir, sink)
+                : JavaZip.extract(job, zip, entry, outDir, sink);
+    }
+
+    public static byte[] zipRead(String zip, String entry, int maxBytes) {
+        return NATIVE ? NativeLib.zipRead(zip, entry, maxBytes) : JavaZip.read(zip, entry, maxBytes);
+    }
+
+    public static String zipTest(long job, String zip, ProgressSink sink) {
+        return NATIVE ? NativeLib.zipTest(job, zip, sink) : JavaZip.test(job, zip, sink);
+    }
 
     // ---- apk / dex / axml --------------------------------------------------
-    public static native String apkInfo(String path);
-    public static native String apkManifestXml(String apk);
-    public static native String axmlToXml(String path);
-    public static native String dexInfo(String path);
+    public static String apkInfo(String path) {
+        return NATIVE ? NativeLib.apkInfo(path) : JavaApk.info(path);
+    }
+
+    public static String apkManifestXml(String apk) {
+        return NATIVE ? NativeLib.apkManifestXml(apk) : JavaApk.manifestXml(apk);
+    }
+
+    public static String axmlToXml(String path) {
+        return NATIVE ? NativeLib.axmlToXml(path) : JavaApk.axmlFileToXml(path);
+    }
+
+    public static String dexInfo(String path) {
+        return NATIVE ? NativeLib.dexInfo(path) : JavaDex.info(path);
+    }
 
     // ---- native binaries ---------------------------------------------------
-    public static native String elfInfo(String path, int maxSymbols);
+    public static String elfInfo(String path, int maxSymbols) {
+        return NATIVE ? NativeLib.elfInfo(path, maxSymbols) : JavaElf.info(path, maxSymbols);
+    }
 
     // ---- search ------------------------------------------------------------
-    public static native int search(long job, String root, String namePattern, String content,
-                                    int flags, int maxResults, RowSink rows, ProgressSink progress);
+    public static int search(long job, String root, String namePattern, String content,
+                             int flags, int maxResults, RowSink rows, ProgressSink progress) {
+        return NATIVE
+                ? NativeLib.search(job, root, namePattern, content, flags, maxResults, rows, progress)
+                : JavaSearch.run(job, root, namePattern, content, flags, maxResults, rows, progress);
+    }
 }

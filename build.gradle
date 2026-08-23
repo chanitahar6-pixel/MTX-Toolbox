@@ -1,6 +1,9 @@
 // Top-level build file. Groovy DSL on purpose: no Kotlin anywhere in this project.
+//
+// AGP 8.1.4 / Gradle 8.4 is the combination that also builds on-device in
+// AndroidIDE. Newer AGP versions work on desktop but are not accepted there.
 plugins {
-    id 'com.android.application' version '8.5.2' apply false
+    id 'com.android.application' version '8.1.4' apply false
 }
 
 tasks.register('clean', Delete) {
