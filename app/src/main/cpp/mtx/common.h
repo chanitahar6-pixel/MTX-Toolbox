@@ -1,12 +1,24 @@
 // MTX Toolbox - shared native primitives.
 // Licensed under the Apache License 2.0.
+//
+// Every engine includes this header, so the platform headers they all rely on
+// (errno, stat, string and stdlib functions) are pulled in here once. That keeps
+// each engine free of per-file include drift.
 #pragma once
 
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
 #include <string>
 #include <vector>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <android/log.h>
 
 #define MTX_TAG "mtx-core"

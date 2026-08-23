@@ -14,7 +14,9 @@
         <item name="android:windowBackground">@color/surface</item>
     </style>
 
-    <style name="Mtx.Title">
+    <!-- parent="" is explicit on purpose: a dotted style name would otherwise be
+         treated as inheriting from a style called "Mtx", which does not exist. -->
+    <style name="Mtx.Title" parent="">
         <item name="android:textSize">16sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textColor">@color/text_primary</item>
@@ -22,19 +24,18 @@
         <item name="android:ellipsize">middle</item>
     </style>
 
-    <style name="Mtx.Body">
+    <style name="Mtx.Body" parent="">
         <item name="android:textSize">14sp</item>
         <item name="android:textColor">@color/text_primary</item>
     </style>
 
-    <style name="Mtx.Meta">
+    <style name="Mtx.Meta" parent="">
         <item name="android:textSize">12sp</item>
         <item name="android:textColor">@color/text_secondary</item>
-        <item name="android:singleLine">true</item>
         <item name="android:ellipsize">middle</item>
     </style>
 
-    <style name="Mtx.Mono">
+    <style name="Mtx.Mono" parent="">
         <item name="android:typeface">monospace</item>
         <item name="android:textSize">13sp</item>
         <item name="android:textColor">@color/text_primary</item>
