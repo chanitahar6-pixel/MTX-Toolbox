@@ -1,4 +1,11 @@
-// JNI surface of app.mtx.toolbox.core.Native.
+// JNI surface of app.mtx.toolbox.core.NativeLib.
+//
+// The Java side is split in two on purpose:
+//   NativeLib  - raw declarations bound to these exports;
+//   Native     - dispatcher that uses NativeLib when libmtxcore.so is present and
+//                the pure-Java engines when it is not.
+// So the export prefix here must stay Java_app_mtx_toolbox_core_NativeLib_.
+//
 // Rules honoured here:
 //  * no C++ exception ever crosses into the JVM;
 //  * every failure sets a thread-local message retrievable via lastError();
@@ -24,7 +31,7 @@ using namespace mtx;
 
 namespace {
 
-constexpr char SEP = '\x01';       // field separator used with Java
+constexpr char SEP = '\x01';       // field separator shared with Java
 thread_local std::string g_lastError;
 
 void setError(const Status& s) { g_lastError = s.msg; }
@@ -79,9 +86,9 @@ jobjectArray toJArray(JNIEnv* env, const std::vector<std::string>& rows) {
 }
 
 // ---- key=value payload builders -------------------------------------------
-// Deliberately three differently named functions instead of overloads: an int
-// argument would otherwise match both the integer and the bool overload, which
-// is an ambiguous call and fails to compile.
+// Three differently named functions instead of overloads on purpose: an int
+// argument would match both an integer and a bool overload, which is ambiguous
+// and does not compile.
 void kvText(std::string& out, const char* key, const std::string& value) {
     out += key;
     out += '=';
@@ -170,7 +177,7 @@ std::string entryRow(const fsx::Entry& e) {
 
 extern "C" {
 
-#define NM(name) Java_app_mtx_toolbox_core_Native_##name
+#define NM(name) Java_app_mtx_toolbox_core_NativeLib_##name
 
 JNIEXPORT jstring JNICALL NM(coreVersion)(JNIEnv* env, jclass) {
     return toJ(env, "mtx-core 0.1.0 (C++17, ndk-build, no Kotlin)");
@@ -339,8 +346,9 @@ JNIEXPORT jint JNICALL NM(hexWrite)(JNIEnv* env, jclass, jstring path, jlong off
     clearError();
     if (!data) return E_RANGE;
     jsize n = env->GetArrayLength(data);
+    if (n <= 0) return E_RANGE;
     std::vector<uint8_t> buf((size_t) n);
-    if (n > 0) env->GetByteArrayRegion(data, 0, n, (jbyte*) buf.data());
+    env->GetByteArrayRegion(data, 0, n, (jbyte*) buf.data());
     Status s = hexx::writeAt(fromJ(env, path), (int64_t) offset, buf.data(), buf.size());
     if (!s.ok()) setError(s);
     return s.code;
