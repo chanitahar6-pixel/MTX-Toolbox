@@ -2,50 +2,48 @@
 
 **Professional Android file manager + tools workbench.** File Manager · APK · DEX · Smali · Archives · Text · Hex · Android Tools · Search · Storage · Network · Binary/Native.
 
-> **Hard rule of this project: NO Kotlin.** Application code is **Java** (Android Framework layer) + **C++17** (all engines, via NDK/JNI, built with **ndk-build / Android.mk**).
+> **Hard rule of this project: NO Kotlin.** Application code is **Java** + **C++17**.
+> Builds on a desktop with an NDK **and** on the phone in **AndroidIDE**, with the same features either way.
 
 ---
 
 ## نظرة عامة (بالعربية)
 
-MTX Toolbox تطبيق أندرويد احترافي مستوحى من تجربة MT Manager لكنه أوسع بكثير: مدير ملفات Dual-Pane حقيقي + أدوات APK/DEX/Smali/Archive/Hex/Binary/Network في تطبيق واحد.
+MTX Toolbox تطبيق أندرويد احترافي مستوحى من تجربة MT Manager لكنه أوسع بكثير: مدير ملفات Dual-Pane حقيقي + أدوات APK/DEX/Archive/Hex/Binary في تطبيق واحد.
 
-* كل المعالجة الثقيلة تُنفَّذ في **C++** عبر NDK/JNI وبواسطة **Android.mk** (بدون تحميل الملف كاملاً إلى الذاكرة).
-* **Java** تُستخدم فقط عند الحاجة إلى Android Framework أو لمكتبة خارجية لا تعمل من C++ مباشرة.
+* المحركات مكتوبة مرتين: بـ **C++17** عبر NDK/JNI وبواسطة **Android.mk**، وبـ **Java** كبديل كامل يعمل بدون NDK.
+* التطبيق يختار المحرك تلقائياً، والنتيجة واحدة في الحالتين، لذلك **يُبنَى داخل AndroidIDE على الهاتف مباشرة**.
 * **ممنوع Kotlin** في أي جزء من المشروع.
-* لا توجد أزرار شكلية: أي زر موجود في الواجهة مرتبط بتنفيذ حقيقي. ما لم يُنفَّذ بعد لا يظهر في الواجهة، بل يبقى في [ROADMAP](docs/ROADMAP.md).
-* اللغة: عربي / إنجليزي قابلة للتغيير من الإعدادات.
-* المظهر: يتبع نظام الهاتف افتراضياً، مع إمكانية اختيار ليلي/نهاري يدوياً.
+* لا توجد أزرار شكلية: أي زر موجود مرتبط بتنفيذ حقيقي، وما لم يُنفَّذ بعد موجود في [ROADMAP](docs/ROADMAP.md).
+* اللغة: عربي / إنجليزي من الإعدادات، والمظهر يتبع نظام الهاتف مع خيار ليلي/نهاري يدوي.
 
 ---
 
-## Architecture
+## Two engines, one behaviour
 
 ```
 Java  (UI / Android Framework only)
   MainActivity (Dual Pane) · Drawer · Settings · Viewers/Editors · PackageManager
   OperationManager  → thread pool, progress, cancel, retry, logs
         |
-        |  JNI  (app.mtx.toolbox.core.Native)
         v
-C++17 engines  (libmtxcore.so, built by ndk-build)
-  fs        streaming/chunked copy·move·delete, stat, du
-  hash      MD5 · SHA-1 · SHA-224 · SHA-256   (384/512 from the platform)
-  zip       central-directory parser, raw inflate, virtual-folder browse
-  axml      binary AndroidManifest.xml decoder
-  dex       header/map validation, class·method·string counts, string pool
-  apk       package info, signing block detection, components, libs, multi-dex
-  elf       headers, sections, dynamic table, symbols, imports/exports, strings
-  hex       paged read/write on huge files
-  search    wildcard + content grep, streaming, cancelable
-  ftype     magic bytes / MIME / tool suggestion
+  Native  (dispatcher: picks whatever is present at runtime)
+        |
+        +--> NativeLib  →  libmtxcore.so     C++17, ndk-build, Android.mk
+        |                  fs · hash · zip · axml · dex · apk · elf · hex · search · ftype
+        |
+        +--> JavaEngine · JavaZip · JavaAxml · JavaApk · JavaDex · JavaElf
+             JavaFileType · JavaSearch        pure Java, no NDK required
 ```
+
+Both sides return the same row and `key=value` payloads, so no screen knows which one
+served it. `Settings → Native engine` tells you which is live.
 
 Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Workspace layout
 
-On first launch the app creates its workspace and never overwrites originals without explicit confirmation:
+Created on first launch; originals are never overwritten without explicit confirmation:
 
 ```
 MTX/
@@ -61,23 +59,27 @@ MTX/
 
 ## Build
 
-Requires **JDK 17**, Android SDK 34 and any recent **NDK**. The native side uses
-`app/src/main/cpp/Android.mk` (ndk-build); there is no CMake in this project.
+**On the phone (AndroidIDE)** — the default configuration, no NDK needed:
+open the root folder, sync, build. Full guide: [docs/BUILD-ANDROIDIDE.md](docs/BUILD-ANDROIDIDE.md).
+
+**On a desktop:**
 
 ```bash
 git clone https://github.com/chanitahar6-pixel/MTX-Toolbox
 cd MTX-Toolbox
-gradle wrapper                    # once, or just open the folder in Android Studio
-./gradlew :app:assembleDebug
+gradle wrapper                                  # once
+./gradlew :app:assembleDebug                    # Java engines
+./gradlew :app:assembleDebug -Pmtx.nativeBuild=true   # + C++ core via Android.mk
 ```
 
-ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`. minSdk 21, targetSdk 34.
-Full instructions and troubleshooting: [docs/BUILD.md](docs/BUILD.md).
+JDK 17, AGP 8.1.4, Gradle 8.4, compileSdk 34, minSdk 21.
+ABIs when native is on: `arm64-v8a`, `armeabi-v7a`, `x86_64`.
+More: [docs/BUILD.md](docs/BUILD.md).
 
 ## Status
 
 * [docs/ROADMAP.md](docs/ROADMAP.md) — what already runs, and what is next, tool by tool.
-* [docs/AUDIT.md](docs/AUDIT.md) — the three-pass build audit: every issue found and how it was fixed.
+* [docs/AUDIT.md](docs/AUDIT.md) — the four-pass build audit: every issue found and how it was fixed.
 * [docs/THIRD-PARTY.md](docs/THIRD-PARTY.md) — license handling for every referenced project.
 
 ## License
