@@ -1,18 +1,40 @@
 # Building MTX Toolbox
 
+Two supported paths:
+
+* **On the phone, in AndroidIDE** (no NDK): see [BUILD-ANDROIDIDE.md](BUILD-ANDROIDIDE.md).
+  This is the default configuration of the repository.
+* **On a desktop or in CI**, with the C++ core compiled: described below.
+
 ## Requirements
 
 | Tool | Version |
 |---|---|
-| JDK | **17** (AGP 8.5 refuses anything older) |
-| Android Gradle Plugin | 8.5.2 |
-| Gradle | 8.7 |
+| JDK | **17** |
+| Android Gradle Plugin | 8.1.4 |
+| Gradle | 8.4 |
 | Android SDK | compileSdk 34, minSdk 21 |
-| NDK | r25 or newer (any recent NDK works, the native build is **ndk-build**) |
+| NDK | any recent release, **only** for `-Pmtx.nativeBuild=true` |
 
-## Native build: ndk-build, not CMake
+## Java-only build (default)
 
-The C++ core is built with **`Android.mk`** + **`Application.mk`**:
+```bash
+git clone https://github.com/chanitahar6-pixel/MTX-Toolbox
+cd MTX-Toolbox
+gradle wrapper          # once; Android Studio and AndroidIDE do this for you
+./gradlew :app:assembleDebug
+```
+
+No NDK needed. The app runs on the pure-Java engines
+(`app/src/main/java/app/mtx/toolbox/core/Java*.java`).
+
+## Build with the C++ core
+
+```bash
+./gradlew :app:assembleDebug -Pmtx.nativeBuild=true
+```
+
+The native side is built with **ndk-build**:
 
 ```
 app/src/main/cpp/Android.mk        module definition (libmtxcore.so)
@@ -29,30 +51,31 @@ externalNativeBuild {
 }
 ```
 
-There is no `CMakeLists.txt` in this project. Adding one back would make Gradle
-try to configure two native build systems at once, which fails.
+There is no `CMakeLists.txt` in this project, and adding one back would make Gradle
+try to configure two native build systems at once.
 
 To build the library on its own, without Gradle:
 
 ```bash
 cd app/src/main
-$ANDROID_NDK_HOME/ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=cpp/Android.mk NDK_APPLICATION_MK=cpp/Application.mk
+$ANDROID_NDK_HOME/ndk-build \
+    NDK_PROJECT_PATH=. \
+    APP_BUILD_SCRIPT=cpp/Android.mk \
+    NDK_APPLICATION_MK=cpp/Application.mk
 ```
 
-## First build
+ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`.
 
-The Gradle wrapper JAR is not committed (binary files are kept out of the repo),
-so generate it once, then build normally:
+## How the two engines coexist
 
-```bash
-gradle wrapper            # only needed once; or just open the project in Android Studio
-./gradlew :app:assembleDebug
-```
+`app.mtx.toolbox.core.Native` is a dispatcher. At class-load time it checks whether
+`libmtxcore.so` loaded:
 
-Output: `app/build/outputs/apk/debug/app-debug.apk`
+* loaded  -> every call goes to `NativeLib`, the JNI declarations;
+* missing -> every call goes to the Java engines.
 
-Android Studio users can skip the wrapper step entirely: open the project folder
-and let Studio sync, it will fetch Gradle 8.7 and prompt for the NDK if missing.
+Both return the same row and `key=value` payloads, so no screen and no tool has any
+idea which engine served it. `Settings -> Native engine` shows which one is live.
 
 ## Release build
 
@@ -60,15 +83,15 @@ and let Studio sync, it will fetch Gradle 8.7 and prompt for the NDK if missing.
 ./gradlew :app:assembleRelease
 ```
 
-R8 is enabled for release. `app/proguard-rules.pro` keeps the JNI entry points
-(`app.mtx.toolbox.core.Native`) and the callback interfaces reachable from native
-code; do not remove those rules or the engines will fail at runtime.
+R8 and resource shrinking are **off** by default so a release build also succeeds
+on-device. If you turn `minifyEnabled` back on, keep the rules in
+`app/proguard-rules.pro`: they preserve `NativeLib` and the JNI callback interfaces.
 
 ## Troubleshooting
 
 | Symptom | Cause |
 |---|---|
-| `NDK not configured` | install any NDK from the SDK Manager; no version is pinned on purpose |
-| `Unsupported class file major version` | you are on JDK 21+ or 11; use JDK 17 |
-| `ndk-build: command not found` | only relevant for the standalone command above; Gradle finds it itself |
-| `libmtxcore.so not found` at runtime | the ABI you are running was excluded; see `abiFilters` |
+| `NDK not configured` | `mtx.nativeBuild=true` without an NDK installed |
+| `Unsupported class file major version` | not on JDK 17 |
+| `libmtxcore.so not found` at runtime | expected in a Java-only build; the Java engines take over |
+| Native build succeeds but tools behave differently | file an issue, both engines must agree |
